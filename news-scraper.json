@@ -1,0 +1,201 @@
+{
+  "name": "news-scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
+        "options": {
+          "ignoreSSL": false
+        }
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        176
+      ],
+      "id": "6bf5d8e6-dcbb-476e-b24d-ac9d2e744fb3",
+      "name": "TOI",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = [];\n\nfunction decodeHTMLEntities(text) {\n  return text\n    .replace(/&#39;/g, `'`)\n    .replace(/&#32;/g, ' ')\n    .replace(/&quot;/g, `\"`)\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>');\n}\n\nfunction extractImage(html) {\n  const match = html.match(/<img[^>]+src=\"([^\"]+)\"/);\n  return match ? match[1] : null;\n}\n\nfor (const item of items) {\n  const link = item.json.link || '';\n  const title = item.json.title || '';\n  const rawDescription =\n    item.json.description ||\n    item.json.content ||\n    item.json.contentSnippet ||\n    'No summary.';\n\n  // ✅ Try enclosure first\n  let image = item.json.enclosure?.url || null;\n\n  // If not found, try extracting from HTML\n  if (!image) {\n    image = extractImage(rawDescription);\n  }\n\n  const stripped = rawDescription.replace(/<[^>]*>/g, '').trim();\n  const decoded = decodeHTMLEntities(stripped);\n\n  const source = 'TOI';\n\n  output.push({\n    json: {\n      title,\n      description: decoded,\n      image: image || '', // ✅ always populated if available\n      source,\n      link,\n      published: item.json.isoDate || item.json.pubDate || '',\n      type: 'news',\n    },\n  });\n}\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "dddf1478-f6f1-49dd-9489-4c7a2bc8a966",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "jsCode": "const filtered = [];\n\nfor (const item of items) {\n  const raw = item.json.description || item.json.content || item.json.contentSnippet || '';\n  const stripped = raw.replace(/<[^>]*>/g, '').trim();\n\n  // Skip if content is empty or too short\n  if (stripped.length < 30) continue;\n\n  filtered.push(item);\n\n  // Stop when we have 10 valid items\n  if (filtered.length === 10) break;\n}\n\n// ✅ If nothing passes, forward 1–2 items anyway\nreturn filtered.length > 0 ? filtered : items.slice(0, 2);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        176
+      ],
+      "id": "4c75edca-7060-4516-a720-216ae20d61b6",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "path": "live-news",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        384,
+        176
+      ],
+      "id": "ae966135-6aa8-4302-ab96-0946e89ecc60",
+      "name": "Webhook",
+      "webhookId": "79dba153-4205-4b93-8dd5-945699d8045f"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simple keyword-based categorizer\nconst CATS = {\n  Politics: [\n    'pm ', 'prime minister', 'minister', 'parliament', 'election', 'poll', 'bjp', 'congress', 'aap',\n    'assembly', 'cabinet', 'policy', 'bill ', 'ordinance', 'loksabha', 'rajya sabha'\n  ],\n  Business: [\n    'market', 'stocks', 'share', 'ipo', 'inflation', 'gdp', 'economy', 'rbi', 'bank', 'startup', 'merger',\n    'acquisition', 'funding', 'revenue', 'profit', 'loss'\n  ],\n  Technology: [\n    'ai ', 'artificial intelligence', 'tech', 'app', 'software', 'hardware', 'semiconductor',\n    'chip', 'isro', 'satellite', 'rocket', 'spacetech', 'cyber', 'data breach'\n  ],\n  Sports: [\n    'cricket', 'ipl', 'world cup', 't20', 'odi', 'bcci', 'football', 'hockey', 'badminton', 'tennis',\n    'gold medal', 'olympic', 'athlete', 'match', 'series'\n  ],\n  Entertainment: [\n    'film', 'movie', 'bollywood', 'hollywood', 'actor', 'actress', 'trailer', 'box office', 'song',\n    'web series', 'ott', 'celebrity'\n  ],\n  Environment: [\n    'rain', 'flood', 'cyclone', 'storm', 'heatwave', 'pollution', 'air quality', 'aqi', 'climate',\n    'monsoon', 'drought', 'wildfire'\n  ],\n  Health: [\n    'covid', 'vaccine', 'virus', 'health', 'hospital', 'doctor', 'disease', 'cases', 'infection',\n    'who ', 'icmr', 'healthcare', 'outbreak'\n  ],\n  International: [\n    'us ', 'china', 'pakistan', 'russia', 'ukraine', 'israel', 'gaza', 'united nations', 'un ',\n    'border', 'international', 'foreign', 'global'\n  ],\n  Crime: [\n    'arrest', 'murder', 'crime', 'fraud', 'scam', 'theft', 'violence', 'assault', 'fir ', 'police',\n    'cbi', 'ncb', 'ed '\n  ],\n  Education: [\n    'exam', 'neet', 'jee', 'result', 'cbse', 'ugc', 'university', 'college', 'students', 'admission',\n    'scholarship', 'rank'\n  ],\n};\n\nconst DEFAULT_CAT = 'Other';\n\nfunction classify(title, description) {\n  const text = (`${title || ''} ${description || ''}`).toLowerCase();\n  let bestCat = DEFAULT_CAT;\n  let bestHits = 0;\n\n  for (const [cat, keywords] of Object.entries(CATS)) {\n    let hits = 0;\n    for (const kw of keywords) {\n      if (text.includes(kw)) hits++;\n    }\n    if (hits > bestHits) {\n      bestHits = hits;\n      bestCat = cat;\n    }\n  }\n  return bestCat;\n}\n\n// n8n automatically injects \"items\"\nreturn items.map(item => {\n  const { title = '', description = '' } = item.json;\n  item.json.category = classify(title, description);\n  return item;\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "0dfe11da-5212-47e2-9e52-be29c7ccc8de",
+      "name": "Categorize (Local)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Encode to base64 without Buffer/btoa\nfunction toBase64(str) {\n  const chars = \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\";\n  let result = \"\";\n  let i = 0;\n\n  while (i < str.length) {\n    const c1 = str.charCodeAt(i++);\n    const c2 = str.charCodeAt(i++);\n    const c3 = str.charCodeAt(i++);\n\n    const e1 = c1 >> 2;\n    const e2 = ((c1 & 3) << 4) | (c2 >> 4);\n    const e3 = isNaN(c2) ? 64 : ((c2 & 15) << 2) | (c3 >> 6);\n    const e4 = isNaN(c2) || isNaN(c3) ? 64 : (c3 & 63);\n\n    result += chars.charAt(e1) + chars.charAt(e2) +\n              (e3 === 64 ? \"=\" : chars.charAt(e3)) +\n              (e4 === 64 ? \"=\" : chars.charAt(e4));\n  }\n  return result.replace(/=+$/, \"\");\n}\n\nfunction makeId(source, link) {\n  const base = `${source || 'unknown'}_${link || ''}`;\n  return toBase64(base);\n}\n\nconst seen = new Set();\n\nreturn items\n  .filter(({ json }) => {\n    const id = makeId(json.source, json.link || json.url || \"\");\n    if (seen.has(id)) return false;\n    seen.add(id);\n    return true;\n  })\n  .map(({ json }) => {\n    const id = makeId(json.source, json.link || json.url || \"\");\n    return {\n      json: {\n        id,\n        title: json.title || \"untitled\",\n        link: json.link || \"\",\n        description: json.description || \"\",\n        image: json.image || \"\",\n        source: json.source || \"TOI\",\n        category: json.category || \"Other\",\n        published: json.published || \"\",\n        createdAt: new Date().toISOString(),\n        lastFetched: new Date().toISOString(),\n      }\n    };\n  });\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        0
+      ],
+      "id": "3bfafa24-52d6-4112-8298-f0dffcb2aef0",
+      "name": "unique & duplicates"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        640,
+        0
+      ],
+      "id": "084f7fd1-5074-491d-a1df-e058a1e1caf5",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "TOI": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Categorize (Local)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "TOI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Categorize (Local)": {
+      "main": [
+        [
+          {
+            "node": "unique & duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "unique & duplicates": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3d156a3c-5ef5-4df6-b146-d9277736fda0",
+  "meta": {
+    "instanceId": "f71bad758aeda399207c1a6abea7a50c83ece779d8ba1dd06a925ee1c53eff76"
+  },
+  "id": "M7whcLl8W0h0Nmxq",
+  "tags": []
+}

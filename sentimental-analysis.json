@@ -1,0 +1,223 @@
+{
+  "name": "sentimental-analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
+        "options": {
+          "ignoreSSL": false
+        }
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -416,
+        -64
+      ],
+      "id": "fc85935a-84a5-4eeb-a354-722f071521be",
+      "name": "TOI3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const requestedId = $json[\"body\"]?.id;\nif (!requestedId) return [];\n\n// pass the ID forward\nreturn [{ json: { id: requestedId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        64
+      ],
+      "id": "f52d541b-4609-44c8-827e-3be57db5e84e",
+      "name": "Extract ID from Webhook1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const requestedId = $items(\"Extract ID from Webhook1\")[0].json.id;\n\nreturn items.filter(item => item.json.id === requestedId);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        -64
+      ],
+      "id": "64514d07-bd44-44a5-bae9-2cf1059f4218",
+      "name": "Filter by ID1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "prompt",
+              "value": "={{ $json.description }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -16,
+        -64
+      ],
+      "id": "403c8596-c12e-4da3-b8ce-c894d0c8e4d7",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze the sentiment of this news article: \"{{ $json.prompt }}\".\nRespond with only one word and in next line explain it in one line : Positive, Negative, Neutral, or Mixed.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        -64
+      ],
+      "id": "9abfe475-bf97-43db-bfcc-03a806929b26",
+      "name": "AI Agent2"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-3.5-turbo",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        80,
+        144
+      ],
+      "id": "70d6b716-d983-4421-95e3-f2e503d95a8a",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "N2cH10TUr6FP5GG5",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "live-data-for-news",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -656,
+        -64
+      ],
+      "id": "501bc8d6-31d3-436a-9ef1-3f6da15bc0fd",
+      "name": "Webhook",
+      "webhookId": "8065a11d-094f-479f-823a-f0b560848278"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        528,
+        -32
+      ],
+      "id": "653f66f5-b9a7-4684-9500-a1e474884524",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "TOI3": {
+      "main": [
+        [
+          {
+            "node": "Filter by ID1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract ID from Webhook1": {
+      "main": [
+        [
+          {
+            "node": "TOI3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter by ID1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent2": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract ID from Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "64b47545-6138-4242-92b7-fe32e95b7165",
+  "meta": {
+    "instanceId": "f71bad758aeda399207c1a6abea7a50c83ece779d8ba1dd06a925ee1c53eff76"
+  },
+  "id": "3c27pabYPnJkyNm3",
+  "tags": []
+}
